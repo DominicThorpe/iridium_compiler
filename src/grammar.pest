@@ -1,4 +1,7 @@
-WHITESPACE = _{" " | "\n"}
-number = {"0b" ~ '0'..'1'+ | "0x" ~ ASCII_HEX_DIGIT+ | ASCII_DIGIT+}
-return_stmt = {"return" ~ number ~ ";"}
-program = {SOI ~ "int" ~ "main" ~ "(" ~ ")" ~ "{" ~ return_stmt{0,1} ~ "}" ~ EOI}
+WHITESPACE = _{" " | NEWLINE}
+number = @{"0b" ~ '0'..'1'+ | "0x" ~ ASCII_HEX_DIGIT+ | ASCII_DIGIT+}
+identifier = {(ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")*}
+return_stmt = ${"return" ~ WHITESPACE+ ~ number ~ WHITESPACE* ~ ";"}
+datatype = {"int"}
+function = {datatype ~ identifier ~ "(" ~ ")" ~ "{" ~ return_stmt{0,1} ~ "}"}
+program = _{SOI ~ function ~ EOI}
