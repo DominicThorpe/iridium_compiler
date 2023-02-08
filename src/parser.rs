@@ -166,7 +166,10 @@ fn build_ast_from_expression(parent:&mut pest::iterators::Pairs<Rule>, pair: pes
                     }
                 },
 
-                None => *sub_expr.unwrap() // last term in the expression
+                None => match sub_expr { // last term in the expression
+                    Some(s) => *s,
+                    None => build_ast_from_term(pair)
+                } 
             }
         },
 
