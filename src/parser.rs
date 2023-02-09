@@ -87,46 +87,45 @@ fn get_node_from_binary_operator(operator:&str) -> BinaryOperator {
 
 
 fn build_ast_from_factor(pair: pest::iterators::Pair<Rule>) -> ASTNode {
-    match pair.as_rule() {
-        Rule::factor => {
-            let mut pair = pair.into_inner();
-            let token = pair.next().unwrap();
-            match token.as_rule() {
-                Rule::unary_operator => {
-                    let operator = get_node_from_unary_operator(token.as_str());
-                    let next = pair.next().unwrap();
-                    let sub_expression = build_ast_from_expression(&mut pair, next, None);
-                    ASTNode::Factor {
-                        operator: Some(operator),
-                        expression: Some(Box::new(sub_expression)),
-                        literal: None
-                    }
-                },
-
-                Rule::number=> {
-                    let literal = ASTNode::Integer(convert_str_to_int(token.as_str()));
-                    ASTNode::Factor {
-                        operator: None,
-                        expression: None,
-                        literal: Some(Box::new(literal))
-                    }
-                },
-
-                unknown_expr => panic!("Unexpected token: {:?}", unknown_expr),
+    let mut pair = pair.into_inner();
+    let token = pair.next().unwrap();
+    match token.as_rule() {
+        Rule::unary_operator => {
+            let operator = get_node_from_unary_operator(token.as_str());
+            let next = pair.next().unwrap();
+            let sub_expression = build_ast_from_expression(&mut pair, next, None);
+            ASTNode::Factor {
+                operator: Some(operator),
+                expression: Some(Box::new(sub_expression)),
+                literal: None
             }
         },
 
-        unknown_expr => panic!("Unexpected factor: {:?}", unknown_expr),
+        Rule::number => {
+            let literal = ASTNode::Integer(convert_str_to_int(token.as_str()));
+            ASTNode::Factor {
+                operator: None,
+                expression: None,
+                literal: Some(Box::new(literal))
+            }
+        },
+
+        Rule::expression => {
+            let mut parent = token.into_inner();
+            let token = parent.next().unwrap();
+            build_ast_from_expression(&mut parent, token, None)
+        }
+
+        unknown_expr => panic!("Unexpected token: {:?}", unknown_expr),
     }
 }
 
 
-fn build_ast_from_term(pair: pest::iterators::Pair<Rule>) -> ASTNode {
+fn build_ast_from_term(parent:&mut pest::iterators::Pairs<Rule>, pair: pest::iterators::Pair<Rule>, sub_expr:Option<Box<ASTNode>>) -> ASTNode {
     match pair.as_rule() {
-        Rule::term => {
-            let term = pair.into_inner().next().unwrap();
+        Rule::factor => {
             ASTNode::Term {
-                lhs: Box::new(build_ast_from_factor(term)),
+                lhs: Box::new(build_ast_from_factor(pair)),
                 operator: None,
                 rhs: None
             }
@@ -151,15 +150,20 @@ fn build_ast_from_expression(parent:&mut pest::iterators::Pairs<Rule>, pair: pes
                     match token.as_rule() {
                         Rule::add_or_sub => {
                             let next_op_token = parent.next().unwrap();
-                            let next_int_token = parent.next().unwrap();
+                            let next_int_parent_token = parent.next().unwrap();
                             let operator = get_node_from_binary_operator(next_op_token.as_str());
+
+                            let mut term_parent = pair.into_inner();
+                            let term_token = term_parent.next().unwrap();
+                            let mut next_int_parent = next_int_parent_token.clone().into_inner();
+                            let next_int_token = next_int_parent.next().unwrap();
                             let sub = ASTNode::Expression {
-                                lhs: sub_expr.unwrap_or(Box::new(build_ast_from_term(pair))),
+                                lhs: sub_expr.unwrap_or(Box::new(build_ast_from_term(&mut term_parent, term_token, None))),
                                 operator: Some(operator),
-                                rhs: Some(Box::new(build_ast_from_term(next_int_token.clone())))
+                                rhs: Some(Box::new(build_ast_from_term(&mut next_int_parent, next_int_token, None)))
                             };
 
-                            build_ast_from_expression(parent, next_int_token, Some(Box::new(sub)))
+                            build_ast_from_expression(parent, next_int_parent_token, Some(Box::new(sub)))
                         },
 
                         unknown_expr => panic!("Unexpected token: {:?}", unknown_expr),
@@ -168,7 +172,11 @@ fn build_ast_from_expression(parent:&mut pest::iterators::Pairs<Rule>, pair: pes
 
                 None => match sub_expr { // last term in the expression
                     Some(s) => *s,
-                    None => build_ast_from_term(pair)
+                    None => {
+                        let mut term_parent = pair.into_inner();
+                        let term_token = term_parent.next().unwrap();
+                        build_ast_from_term(&mut term_parent, term_token, None)
+                    }
                 } 
             }
         },
